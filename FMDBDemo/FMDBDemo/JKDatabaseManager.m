@@ -40,9 +40,9 @@ static NSString * const kDatabaseTableName = @"jk_demo_table";
 
 - (void)initializeDatabase {
     /// 这里只有一张表，整一个串行队列负责查询就行，多表可以用多个队列管理
-    _querySerialQueue = dispatch_queue_create("jk_database_query_queue", DISPATCH_QUEUE_SERIAL);
-    _updateSerialQueue = dispatch_queue_create("jk_database_update_queue", DISPATCH_QUEUE_SERIAL);
-    
+//    _querySerialQueue = dispatch_queue_create("jk_database_query_queue", DISPATCH_QUEUE_SERIAL);
+//    _updateSerialQueue = dispatch_queue_create("jk_database_update_queue", DISPATCH_QUEUE_SERIAL);
+    _updateSerialQueue = _querySerialQueue = dispatch_get_main_queue();
     _databaseQueue = [[FMDatabaseQueue alloc] initWithPath:[self pathWithDatabaseName:kDatabaseName]];
     
     
@@ -84,7 +84,6 @@ static NSString * const kDatabaseTableName = @"jk_demo_table";
     
     dispatch_async(self.updateSerialQueue, ^{
         [self.databaseQueue inDatabase:^(FMDatabase *database) {
-            NSLog(@"Insert: %@",[NSThread currentThread]);
             NSString * updateStr = [NSString stringWithFormat:@"insert into %@ (url, paramters, timing, content) values ('%@','%@','%@','%@')",kDatabaseTableName, url, paramterStr, timing, contentStr];
             if (![database executeUpdate:updateStr]) {
                 NSLog(@"JK Database Manager 插入数据失败:%@ ",updateStr);
@@ -117,7 +116,6 @@ static NSString * const kDatabaseTableName = @"jk_demo_table";
     
     dispatch_async(self.querySerialQueue, ^{
         [self.databaseQueue inDatabase:^(FMDatabase *database) {
-            NSLog(@"Query: %@",[NSThread currentThread]);
             [database setDateFormat:JK_Database_DateFormatter()];
             
             /// 昨天的0时0分0秒 datetime('now','start of day', '-1 day')
@@ -138,10 +136,10 @@ static NSString * const kDatabaseTableName = @"jk_demo_table";
             }
             
             /// 查询完就close resultSet
-            //            [resultSet close];
-            //            dispatch_async(dispatch_get_main_queue(), ^{
-            //            });
-            if (completionHandler) completionHandler(mutArray.copy);
+            [resultSet close];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (completionHandler) completionHandler(mutArray.copy);
+            });
         }];
     });
 }
@@ -151,7 +149,7 @@ static NSString * const kDatabaseTableName = @"jk_demo_table";
 - (void)deleteTheRequestRecordWithTiming:(NSString *)timing completionHandler:(void (^)(BOOL))completionHandler {
     dispatch_async(self.updateSerialQueue, ^{
         [self.databaseQueue inDatabase:^(FMDatabase *database) {
-            NSLog(@"Delete: %@",[NSThread currentThread]);
+            
             NSString * delete = [NSString stringWithFormat:@"delete from %@ where timing = '%@'",kDatabaseTableName, timing];
             if (![database executeUpdate:delete]) {
                 NSLog(@"JK Database Manager 删除数据失败:%@ ",delete);
